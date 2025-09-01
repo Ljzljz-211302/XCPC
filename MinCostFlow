@@ -1,0 +1,121 @@
+Q：两个序列a,b，ai可以匹配bj当且仅当i <= j，匹配代价为ai+bj。求一个大小恰好为k的匹配使总代价最小
+网络流建模：一般流为限制(或者要满足某个要求)，费用为代价/操作数
+Hint1: 类似二分图那样将a,b分为两部分，自然地S向ai连流量1费用ai的边，bi向T连流量1费用bi的边
+Hint2: 考虑a,b之间的关系，对于每个i，应该向大于等于i的j连流量1费用0的边，但这样会增加边的数量，所以对于每个bi,连bi->b[i+1]的边，流量INF费用0；实际上类似于后缀优化建图，i->j的直连边被一条路径代替了而已
+Hint3: 如何满足题中大小恰好为k的限制呢？我们使上面提到过的T成为虚汇点，连T->P的边，流量k费用0
+Hint4: 在建出的图上跑最小费用最大流即可，答案为费用
+Code:
+#include<bits/stdc++.h>
+using ll = long long;
+constexpr ll INF = std::numeric_limits<ll>::max();
+template<class T>
+struct MinCostFlow {
+	struct _Edge {
+		int to;
+		T cap;
+		T cost;
+		_Edge(int to_, T cap_, T cost_) : to(to_), cap(cap_), cost(cost_) {}
+	};
+	int n;
+	std::vector<_Edge> e;
+	std::vector<std::vector<int>> g;
+	std::vector<T> h, dis;
+	std::vector<int> pre;
+	bool dijkstra(int s, int t) {
+		dis.assign(n, std::numeric_limits<T>::max());
+		pre.assign(n, -1);
+		std::priority_queue<std::pair<T, int>, std::vector<std::pair<T, int>>, std::greater<std::pair<T, int>>> que;
+		dis[s] = 0;
+		que.emplace(0, s);
+		while (!que.empty()) {
+			T d = que.top().first;
+			int u = que.top().second;
+			que.pop();
+			if (dis[u] != d) {
+				continue;
+			}
+			for (int i : g[u]) {
+				int v = e[i].to;
+				T cap = e[i].cap;
+				T cost = e[i].cost;
+				if (cap > 0 && dis[v] > d + h[u] - h[v] + cost) {
+					dis[v] = d + h[u] - h[v] + cost;
+					pre[v] = i;
+					que.emplace(dis[v], v);
+				}
+			}
+		}
+		return dis[t] != std::numeric_limits<T>::max();
+	}
+	MinCostFlow() {}
+	MinCostFlow(int n_) {
+		init(n_);
+	}
+	void init(int n_) {
+		n = n_;
+		e.clear();
+		g.assign(n, {});
+	}
+	void addEdge(int u, int v, T cap, T cost) {
+		g[u].push_back(e.size());
+		e.emplace_back(v, cap, cost);
+		g[v].push_back(e.size());
+		e.emplace_back(u, 0, -cost);
+	}
+	std::pair<T, T> flow(int s, int t) {
+		T flow = 0;
+		T cost = 0;
+		h.assign(n, 0);
+		while (dijkstra(s, t)) {
+			for (int i = 0; i < n; ++i) {
+				h[i] += dis[i];
+			}
+			T aug = std::numeric_limits<int>::max();
+			for (int i = t; i != s; i = e[pre[i] ^ 1].to) {
+				aug = std::min(aug, e[pre[i]].cap);
+			}
+			for (int i = t; i != s; i = e[pre[i] ^ 1].to) {
+				e[pre[i]].cap -= aug;
+				e[pre[i] ^ 1].cap += aug;
+			}
+			flow += aug;
+			cost += aug * h[t];
+		}
+		return std::make_pair(flow, cost);
+	}
+	struct Edge {
+		int from;
+		int to;
+		T cap;
+		T cost;
+		T flow;
+		Edge(int from, int to, T cap, T cost, T flow) :from(from), to(to), cap(cap), cost(cost), flow(flow) {}
+	};
+	std::vector<Edge> edges() {
+		std::vector<Edge> a;
+		for (int i = 0; i < e.size(); i += 2) {
+			a.emplace_back(e[i + 1].to, e[i].to, e[i].cap + e[i + 1].cap, e[i].cost, e[i + 1].cap);
+		}
+		return a;
+	}
+};
+int main()
+{
+	std::ios::sync_with_stdio(0); std::cin.tie(0); std::cout.tie(0);
+	int T = 1;
+	//std::cin >> T;
+	while (T--)
+	{
+		int n, m;
+		std::cin >> n >> m;
+		std::vector<int> a(n + 1), b(n + 1);
+		for (int i = 1; i <= n; i++) std::cin >> a[i];
+		for (int i = 1; i <= n; i++) std::cin >> b[i];
+		MinCostFlow<ll> mcf(2 * n + 3);
+		int s = 0, t = 2 * n + 2, p = n << 1 | 1;
+		for (int i = 1; i <= n; i++) mcf.addEdge(s, i, 1, 0), mcf.addEdge(i, i + n, 1, a[i]), mcf.addEdge(i + n, p, 1, b[i]);
+		for (int i = 1; i < n; i++) mcf.addEdge(i + n, i + n + 1, INF, 0);
+		mcf.addEdge(p, t, m, 0);
+		std::cout << mcf.flow(s, t).second << '\n';
+	}
+}
